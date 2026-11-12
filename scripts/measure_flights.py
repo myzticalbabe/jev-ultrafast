@@ -23,10 +23,19 @@ from examples.flights import GOALS, URL, verify  # noqa: E402
 
 folder = Path(args.output)
 folder.mkdir(parents=True, exist_ok=False)
-source_hashes = {
-    p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (source / "jev_ultrafast").iterdir() if p.suffix in {".py", ".js"}
-}
+# Go fast path first (parallel sha256 via flightfp binary); hashlib fallback.
+try:
+    from jev_ultrafast.flight_fp import fingerprint_dir as _fp_dir
+    _fps = _fp_dir(source / "jev_ultrafast", ext="")
+except ImportError:
+    _fps = None
+if _fps is not None:
+    source_hashes = {k: v for k, v in _fps.items() if k.endswith((".py", ".js"))}
+else:
+    source_hashes = {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in (source / "jev_ultrafast").iterdir() if p.suffix in {".py", ".js"}
+    }
 raw = browser_module.cdp
 calls = defaultdict(list)
 

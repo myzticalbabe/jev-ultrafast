@@ -16,11 +16,21 @@ from jev_ultrafast import Agent  # noqa: E402
 
 folder = Path(sys.argv[1] if len(sys.argv) > 1 else "artifacts/flights/recorded")
 folder.mkdir(parents=True, exist_ok=False)
-source_hashes = {
-    p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-    for p in (Path(__file__).resolve().parents[1] / "jev_ultrafast").iterdir()
-    if p.suffix in {".py", ".js"}
-}
+# Go fast path first (parallel sha256 via flightfp binary); hashlib fallback.
+try:
+    from jev_ultrafast.flight_fp import fingerprint_dir as _fp_dir
+except ImportError:
+    _fp_dir = None  # type: ignore[assignment]
+_source_dir = Path(__file__).resolve().parents[1] / "jev_ultrafast"
+_fps = _fp_dir(_source_dir, ext="") if _fp_dir is not None else None
+if _fps is not None:
+    source_hashes = {k: v for k, v in _fps.items() if k.endswith((".py", ".js"))}
+else:
+    source_hashes = {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in _source_dir.iterdir()
+        if p.suffix in {".py", ".js"}
+    }
 agent = Agent(URL, GOALS)
 (folder / "frames").mkdir(exist_ok=True)
 (folder / "frames" / "000000.jpg").write_bytes(
